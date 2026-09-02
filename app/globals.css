@@ -1,0 +1,257 @@
+@import "tailwindcss";
+
+@theme {
+  /* nền — trắng */
+  --color-white: #ffffff;
+  --color-paper: #ffffff;
+  --color-cream: #f2f3f1; /* xám lạnh rất nhạt — section xen kẽ */
+
+  /* mực — Charcoal */
+  --color-ink: #3f4146;
+  --color-ink-soft: #5b5d63;
+  --color-ink-faint: #8b8d93;
+
+  /* dải tối — Navy #1F2332 */
+  --color-midnight: #1f2332;
+  --color-midnight-deep: #16181f;
+  --color-navy: #1f2332;
+  --color-navy-deep: #16181f;
+
+  /* nhấn chính — Xanh Lifecar #5482C3 */
+  --color-brass: #5482c3;
+  --color-gold: #5482c3;
+  --color-accent: #5482c3;
+  --color-accent-deep: #3f5f8f;
+  --color-brass-bright: #79a9d0; /* Sky Blue — nhấn trên nền tối */
+  --color-gold-bright: #79a9d0;
+
+  /* xanh phụ + gold đặc biệt */
+  --color-secondary: #4e6b9c;
+  --color-sky: #79a9d0;
+  --color-goldaccent: #d9c08d; /* CTA đặc biệt / gạch nhấn */
+
+  /* đường kẻ — tint xanh nhạt */
+  --color-line: #dee3eb;
+  --color-line-strong: #c4cddb;
+
+  /* mô hình sách 3D */
+  --color-navy-600: #5482c3;
+  --color-navy-900: #1f2332;
+
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display), "Bricolage Grotesque", ui-sans-serif,
+    system-ui, sans-serif;
+  --font-accent: var(--font-accent), "Fraunces", Georgia, serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 88px;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-midnight);
+  color: #fff;
+}
+
+/* Tailwind v4 bỏ cursor:pointer mặc định cho button — trả lại */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+summary,
+label:has(input),
+a[href] {
+  cursor: pointer;
+}
+
+/* ---- Typography ---- */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.06;
+}
+
+.display-xl {
+  font-family: var(--font-display);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+}
+
+/* nhấn editorial — serif italic */
+.display-italic {
+  font-family: var(--font-accent);
+  font-style: italic;
+  font-weight: 400;
+}
+
+.eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+/* ---- Grain overlay ---- */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ---------- Mô hình sách 3D ---------- */
+.book3d-scene {
+  perspective: 1700px;
+}
+
+.book3d {
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(5deg) rotateY(-30deg);
+  transition: transform 0.7s cubic-bezier(0.23, 1, 0.32, 1);
+  animation: book3d-float 7s ease-in-out infinite;
+}
+
+.book3d-scene:hover .book3d {
+  transform: rotateX(4deg) rotateY(-16deg);
+}
+
+.book3d__face {
+  position: relative;
+  border-radius: 2px 5px 5px 2px;
+  overflow: hidden;
+  box-shadow: inset 4px 0 12px rgba(0, 0, 0, 0.3),
+    inset -1px 0 2px rgba(255, 255, 255, 0.22), 0 1px 1px rgba(0, 0, 0, 0.1);
+  transform: translateZ(calc(var(--book-depth) / 2));
+}
+
+.book3d__face img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.book3d__spine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: var(--book-depth);
+  background: linear-gradient(90deg, #1f2332, #3a4a6b 45%, #1f2332);
+  transform: rotateY(-90deg);
+  transform-origin: left center;
+  border-radius: 2px 0 0 2px;
+}
+
+.book3d__pages {
+  position: absolute;
+  top: 1.5%;
+  right: 0;
+  height: 97%;
+  width: var(--book-depth);
+  background: repeating-linear-gradient(
+    90deg,
+    #f2f1e6,
+    #f2f1e6 1px,
+    #cdccbd 2px,
+    #f2f1e6 3px
+  );
+  transform: rotateY(90deg);
+  transform-origin: right center;
+  border-radius: 0 2px 2px 0;
+}
+
+.book3d__back {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #2a2f42, #1f2332);
+  border-radius: 5px 2px 2px 5px;
+  transform: translateZ(calc(var(--book-depth) / -2)) rotateY(180deg);
+}
+
+.book3d__shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -9%;
+  width: 78%;
+  height: 34px;
+  background: rgba(33, 30, 26, 0.28);
+  filter: blur(28px);
+  border-radius: 50%;
+  transform: translateX(-50%) rotateX(90deg);
+  animation: book3d-shadow 7s ease-in-out infinite;
+}
+
+@keyframes book3d-float {
+  0%,
+  100% {
+    transform: rotateX(5deg) rotateY(-30deg) translateY(0);
+  }
+  50% {
+    transform: rotateX(5deg) rotateY(-30deg) translateY(-12px);
+  }
+}
+
+@keyframes book3d-shadow {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) rotateX(90deg) scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: translateX(-50%) rotateX(90deg) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book3d,
+  .book3d__shadow {
+    animation: none;
+  }
+}
+
+/* ---- reveal khi load ---- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise {
+  animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
+}
