@@ -5,4 +5,11 @@
 .DS_Store
 *.pem
 .env*
+!.env.example
 next-env.d.ts
+
+# drizzle migrations kept; local db studio artifacts ignored
+/.drizzle
+
+# tsc incremental cache
+*.tsbuildinfo

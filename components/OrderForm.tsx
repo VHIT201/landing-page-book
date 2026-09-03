@@ -9,16 +9,50 @@ import Reveal from "./motion/Reveal";
 const barcode =
   "repeating-linear-gradient(90deg,#211e1a 0 2px,transparent 2px 5px,#211e1a 5px 6px,transparent 6px 11px,#211e1a 11px 14px,transparent 14px 16px,#211e1a 16px 17px,transparent 17px 22px)";
 
+type OrderResult = { code: string; totalAmount: number };
+
 export default function OrderForm() {
   const o = site.orderForm;
   const f = site.finalCta;
-  const [done, setDone] = useState(false);
+  const [result, setResult] = useState<OrderResult | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const reduce = useReducedMotion();
+  const done = result !== null;
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // TODO: gửi tới o.action (API / Google Form / CRM). Hiện chỉ giả lập.
-    setDone(true);
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+
+    const fd = new FormData(e.currentTarget);
+    const payload = {
+      name: String(fd.get("name") ?? ""),
+      phone: String(fd.get("phone") ?? ""),
+      address: String(fd.get("address") ?? ""),
+      quantity: Number(fd.get("quantity") ?? 1),
+      source:
+        typeof window !== "undefined" ? window.location.pathname : undefined,
+    };
+
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.error ?? "Gửi đơn thất bại, thử lại sau");
+        return;
+      }
+      setResult({ code: data.code, totalAmount: data.totalAmount });
+    } catch {
+      setError("Mất kết nối, thử lại sau");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -77,13 +111,15 @@ export default function OrderForm() {
                   <span className="rotate-[-7deg] border-[3px] border-brass px-6 py-2 font-display text-2xl font-bold uppercase tracking-[0.2em] text-brass">
                     Đã lên đường
                   </span>
-                  <p className="mt-7 max-w-sm leading-relaxed text-ink-soft">
-                    Đơn hàng đã được ghi nhận. Chúng tôi sẽ gọi xác nhận trong 24
-                    giờ.
+                  <p className="mt-7 font-mono text-sm uppercase tracking-[0.15em] text-ink-faint">
+                    Mã đơn
                   </p>
-                  <p className="mt-3 text-xs text-ink-faint">
-                    (Demo — chưa nối API. Cấu hình <code>orderForm.action</code>{" "}
-                    trong <code>content/site.ts</code>.)
+                  <p className="font-display text-3xl font-bold text-ink">
+                    {result?.code}
+                  </p>
+                  <p className="mt-4 max-w-sm leading-relaxed text-ink-soft">
+                    Đơn <b>{result?.totalAmount.toLocaleString("vi-VN")}đ</b> đã
+                    được ghi nhận. Chúng tôi sẽ gọi xác nhận trong 24 giờ.
                   </p>
                 </motion.div>
               ) : (
@@ -144,13 +180,22 @@ export default function OrderForm() {
 
                   <button
                     type="submit"
-                    className="group mt-9 flex w-full items-center justify-center gap-3 bg-navy px-6 py-4 text-sm font-semibold uppercase tracking-[0.2em] text-white transition-colors duration-150 hover:bg-brass"
+                    disabled={submitting}
+                    className="group mt-9 flex w-full items-center justify-center gap-3 bg-navy px-6 py-4 text-sm font-semibold uppercase tracking-[0.2em] text-white transition-colors duration-150 hover:bg-brass disabled:opacity-60"
                   >
-                    Xác nhận · Lên đường
-                    <span className="transition-transform duration-150 group-hover:translate-x-1">
-                      &rarr;
-                    </span>
+                    {submitting ? "Đang gửi…" : "Xác nhận · Lên đường"}
+                    {!submitting && (
+                      <span className="transition-transform duration-150 group-hover:translate-x-1">
+                        &rarr;
+                      </span>
+                    )}
                   </button>
+
+                  {error && (
+                    <p className="mt-3 text-center text-sm text-red-600">
+                      {error}
+                    </p>
+                  )}
 
                   <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
                     {f.perks.join("  ·  ")}
