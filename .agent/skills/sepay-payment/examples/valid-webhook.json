@@ -1,0 +1,14 @@
+{
+  "id": 92704,
+  "gateway": "Vietcombank",
+  "transactionDate": "2024-07-02 11:08:33",
+  "accountNumber": "0123456789",
+  "subAccount": "",
+  "code": "LC-AB23CD",
+  "content": "LC-AB23CD chuyen tien",
+  "transferType": "in",
+  "description": "NGUYEN VAN A chuyen tien",
+  "transferAmount": 198000,
+  "accumulated": 105000000,
+  "referenceCode": "FT24012345678"
+}

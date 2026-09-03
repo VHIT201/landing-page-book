@@ -1,0 +1,14 @@
+{
+  "id": 92706,
+  "gateway": "MBBank",
+  "transactionDate": "2024-07-02 12:00:00",
+  "accountNumber": "9999999999",
+  "subAccount": "",
+  "code": null,
+  "content": "random transfer content",
+  "transferType": "out",
+  "description": "",
+  "transferAmount": 50000,
+  "accumulated": 0,
+  "referenceCode": ""
+}
