@@ -28,10 +28,16 @@ export function priceQuote(quantity: number) {
   return { unitPrice, shippingFee, totalAmount };
 }
 
+function composeAddress(i: CreateOrderInput): string {
+  return [i.addressDetail, i.ward.name, i.district.name, i.province.name]
+    .filter(Boolean)
+    .join(", ");
+}
+
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
   const { unitPrice, shippingFee, totalAmount } = priceQuote(input.quantity);
+  const addressLine = composeAddress(input);
 
-  // thử tối đa 5 lần nếu trùng code
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = genCode();
     try {
@@ -41,7 +47,14 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
           code,
           customerName: input.name,
           customerPhone: input.phone,
-          addressLine: input.address,
+          provinceCode: input.province.code,
+          provinceName: input.province.name,
+          districtCode: input.district.code,
+          districtName: input.district.name,
+          wardCode: input.ward.code,
+          wardName: input.ward.name,
+          addressDetail: input.addressDetail,
+          addressLine,
           quantity: input.quantity,
           unitPrice,
           shippingFee,
@@ -79,10 +92,7 @@ export async function setOrderStatus(
   if (!current) return null;
   if (current.status === toStatus) return current;
 
-  const patch: Partial<Order> = {
-    status: toStatus,
-    updatedAt: new Date(),
-  };
+  const patch: Partial<Order> = { status: toStatus, updatedAt: new Date() };
   if (toStatus === "paid" && !current.paidAt) patch.paidAt = new Date();
 
   const [row] = await db
@@ -103,9 +113,7 @@ export async function setOrderStatus(
 
 export async function updateOrderFields(
   orderId: string,
-  fields: Partial<
-    Pick<Order, "carrier" | "trackingNo" | "adminNote">
-  >,
+  fields: Partial<Pick<Order, "carrier" | "trackingNo" | "adminNote">>,
 ): Promise<Order | null> {
   const [row] = await db
     .update(orders)
@@ -160,4 +168,43 @@ export async function getOrderByCode(code: string): Promise<Order | null> {
     .from(orders)
     .where(eq(orders.code, code.toUpperCase()));
   return row ?? null;
+}
+
+export async function getOrderHistory(orderId: string) {
+  return db
+    .select()
+    .from(orderStatusHistory)
+    .where(eq(orderStatusHistory.orderId, orderId))
+    .orderBy(orderStatusHistory.createdAt);
+}
+
+export async function getStats() {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const [totals] = await db
+    .select({
+      totalOrders: sql<number>`count(*)::int`,
+      revenue: sql<number>`coalesce(sum(${orders.totalAmount}) filter (where ${orders.status} in ('paid','preparing','shipping','delivered')), 0)::bigint`,
+      today: sql<number>`count(*) filter (where ${orders.createdAt} >= ${startOfDay.toISOString()})::int`,
+    })
+    .from(orders);
+
+  const byStatusRows = await db
+    .select({
+      status: orders.status,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(orders)
+    .groupBy(orders.status);
+
+  const byStatus: Record<string, number> = {};
+  for (const r of byStatusRows) byStatus[r.status] = r.count;
+
+  return {
+    totalOrders: totals?.totalOrders ?? 0,
+    revenue: Number(totals?.revenue ?? 0),
+    today: totals?.today ?? 0,
+    byStatus,
+  };
 }

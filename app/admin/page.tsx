@@ -1,19 +1,15 @@
-import { listOrders } from "@/lib/orders";
+import Link from "next/link";
+import { getStats, listOrders } from "@/lib/orders";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/db/schema";
-import AdminOrderRow from "./AdminOrderRow";
+import { STATUS_LABEL } from "@/lib/orderStatus";
+import AdminStatusSelect from "./AdminStatusSelect";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending_payment: "Chờ thanh toán",
-  paid: "Đã thanh toán",
-  preparing: "Đang đóng gói",
-  shipping: "Đang giao",
-  delivered: "Đã giao",
-  cancelled: "Đã huỷ",
-  refunded: "Hoàn tiền",
-};
+function fmt(n: number) {
+  return n.toLocaleString("vi-VN");
+}
 
 export default async function AdminPage({
   searchParams,
@@ -25,52 +21,64 @@ export default async function AdminPage({
     ? (sp.status as OrderStatus)
     : undefined;
 
-  const { rows, total, page, pageSize } = await listOrders({
-    status,
-    q: sp.q,
-    page: Number(sp.page ?? 1),
-  });
+  const [stats, list] = await Promise.all([
+    getStats(),
+    listOrders({ status, q: sp.q, page: Number(sp.page ?? 1) }),
+  ]);
+  const { rows, total, page, pageSize } = list;
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 font-sans text-sm text-neutral-800">
-      <h1 className="text-xl font-bold">Đơn hàng — THE LIFECAR</h1>
+    <main className="mx-auto max-w-6xl px-4 py-8 text-sm">
+      <h1 className="text-xl font-bold">Đơn hàng</h1>
+
+      {/* stat cards */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card label="Tổng đơn" value={fmt(stats.totalOrders)} />
+        <Card label="Doanh thu (đã TT+)" value={`${fmt(stats.revenue)}đ`} />
+        <Card label="Đơn hôm nay" value={fmt(stats.today)} />
+        <Card
+          label="Chờ thanh toán"
+          value={fmt(stats.byStatus["pending_payment"] ?? 0)}
+        />
+      </div>
+
+      {/* per-status chips */}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <StatusChip active={!status} href="/admin" label={`Tất cả (${total})`} />
+        {ORDER_STATUSES.map((s) => (
+          <StatusChip
+            key={s}
+            active={status === s}
+            href={`/admin?status=${s}`}
+            label={`${STATUS_LABEL[s]} (${stats.byStatus[s] ?? 0})`}
+          />
+        ))}
+      </div>
 
       <form className="mt-4 flex flex-wrap gap-2" method="get">
+        {status && <input type="hidden" name="status" value={status} />}
         <input
           name="q"
           defaultValue={sp.q}
           placeholder="Tìm mã / SĐT / tên"
           className="rounded border border-neutral-300 px-3 py-1.5"
         />
-        <select
-          name="status"
-          defaultValue={sp.status ?? ""}
-          className="rounded border border-neutral-300 px-3 py-1.5"
-        >
-          <option value="">Tất cả trạng thái</option>
-          {ORDER_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {STATUS_LABEL[s]}
-            </option>
-          ))}
-        </select>
         <button className="rounded bg-neutral-900 px-4 py-1.5 font-semibold text-white">
-          Lọc
+          Tìm
         </button>
-        <span className="self-center text-neutral-500">{total} đơn</span>
       </form>
 
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 overflow-x-auto rounded border border-neutral-200 bg-white">
         <table className="w-full border-collapse text-left">
-          <thead className="border-b-2 border-neutral-300 text-xs uppercase tracking-wide text-neutral-500">
+          <thead className="border-b border-neutral-200 text-xs uppercase tracking-wide text-neutral-500">
             <tr>
-              <th className="py-2 pr-3">Mã / Ngày</th>
-              <th className="py-2 pr-3">Khách</th>
-              <th className="py-2 pr-3">Địa chỉ</th>
-              <th className="py-2 pr-3">SL / Tổng</th>
-              <th className="py-2 pr-3">Trạng thái</th>
-              <th className="py-2 pr-3">Vận chuyển</th>
+              <th className="px-3 py-2">Mã / Ngày</th>
+              <th className="px-3 py-2">Khách</th>
+              <th className="px-3 py-2">Địa chỉ</th>
+              <th className="px-3 py-2">SL / Tổng</th>
+              <th className="px-3 py-2">Trạng thái</th>
+              <th className="px-3 py-2">Vận chuyển</th>
             </tr>
           </thead>
           <tbody>
@@ -82,52 +90,105 @@ export default async function AdminPage({
               </tr>
             )}
             {rows.map((o) => (
-              <AdminOrderRow
+              <tr
                 key={o.id}
-                order={{
-                  id: o.id,
-                  code: o.code,
-                  createdAt: o.createdAt.toISOString(),
-                  customerName: o.customerName,
-                  customerPhone: o.customerPhone,
-                  addressLine: o.addressLine,
-                  quantity: o.quantity,
-                  totalAmount: o.totalAmount,
-                  status: o.status,
-                  carrier: o.carrier,
-                  trackingNo: o.trackingNo,
-                  adminNote: o.adminNote,
-                }}
-              />
+                className="border-b border-neutral-100 align-top last:border-0"
+              >
+                <td className="px-3 py-2">
+                  <Link
+                    href={`/admin/orders/${o.code}`}
+                    className="font-mono font-semibold text-blue-700 hover:underline"
+                  >
+                    {o.code}
+                  </Link>
+                  <div className="text-xs text-neutral-400">
+                    {new Date(o.createdAt).toLocaleString("vi-VN")}
+                  </div>
+                </td>
+                <td className="px-3 py-2">
+                  {o.customerName}
+                  <div className="text-xs text-neutral-500">
+                    {o.customerPhone}
+                  </div>
+                </td>
+                <td className="max-w-[240px] px-3 py-2 text-neutral-600">
+                  {o.addressLine}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                  {o.quantity} ·{" "}
+                  <span className="font-semibold">{fmt(o.totalAmount)}đ</span>
+                </td>
+                <td className="px-3 py-2">
+                  <AdminStatusSelect id={o.id} status={o.status} />
+                </td>
+                <td className="px-3 py-2 text-xs text-neutral-500">
+                  {o.carrier || "—"}
+                  {o.trackingNo ? ` · ${o.trackingNo}` : ""}
+                </td>
+              </tr>
             ))}
           </tbody>
         </table>
       </div>
 
       {pages > 1 && (
-        <div className="mt-4 flex gap-1">
+        <div className="mt-4 flex flex-wrap gap-1">
           {Array.from({ length: pages }).map((_, i) => {
             const p = i + 1;
             const params = new URLSearchParams();
             if (sp.q) params.set("q", sp.q);
-            if (sp.status) params.set("status", sp.status);
+            if (status) params.set("status", status);
             params.set("page", String(p));
             return (
-              <a
+              <Link
                 key={p}
                 href={`/admin?${params}`}
                 className={`rounded border px-3 py-1 ${
                   p === page
                     ? "border-neutral-900 bg-neutral-900 text-white"
-                    : "border-neutral-300"
+                    : "border-neutral-300 bg-white"
                 }`}
               >
                 {p}
-              </a>
+              </Link>
             );
           })}
         </div>
       )}
     </main>
+  );
+}
+
+function Card({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-neutral-200 bg-white p-4">
+      <div className="text-xs uppercase tracking-wide text-neutral-500">
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-bold tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+function StatusChip({
+  active,
+  href,
+  label,
+}: {
+  active: boolean;
+  href: string;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-full border px-3 py-1 text-xs ${
+        active
+          ? "border-neutral-900 bg-neutral-900 text-white"
+          : "border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100"
+      }`}
+    >
+      {label}
+    </Link>
   );
 }

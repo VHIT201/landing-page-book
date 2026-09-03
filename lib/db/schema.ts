@@ -39,7 +39,16 @@ export const orders = pgTable("orders", {
 
   customerName: text("customer_name").notNull(),
   customerPhone: text("customer_phone").notNull(),
-  addressLine: text("address_line").notNull(),
+
+  // địa chỉ giao — hành chính VN + chi tiết
+  provinceCode: text("province_code"),
+  provinceName: text("province_name"),
+  districtCode: text("district_code"),
+  districtName: text("district_name"),
+  wardCode: text("ward_code"),
+  wardName: text("ward_name"),
+  addressDetail: text("address_detail"), // số nhà, tên đường
+  addressLine: text("address_line").notNull(), // chuỗi đầy đủ đã ghép, để hiển thị nhanh
 
   quantity: integer("quantity").notNull(),
   unitPrice: integer("unit_price").notNull(), // chốt ở server

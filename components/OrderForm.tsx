@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { site } from "@/content/site";
+import AddressPicker, { type AddressValue } from "./AddressPicker";
 import BookCover from "./BookCover";
 import Reveal from "./motion/Reveal";
 
@@ -19,10 +20,23 @@ export default function OrderForm() {
   const [error, setError] = useState<string | null>(null);
   const reduce = useReducedMotion();
   const done = result !== null;
+  const addr = useRef<AddressValue>({
+    province: null,
+    district: null,
+    ward: null,
+    addressDetail: "",
+  });
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (submitting) return;
+
+    const a = addr.current;
+    if (!a.province || !a.district || !a.ward || a.addressDetail.trim().length < 3) {
+      setError("Vui lòng chọn đầy đủ địa chỉ nhận hàng");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -30,8 +44,11 @@ export default function OrderForm() {
     const payload = {
       name: String(fd.get("name") ?? ""),
       phone: String(fd.get("phone") ?? ""),
-      address: String(fd.get("address") ?? ""),
       quantity: Number(fd.get("quantity") ?? 1),
+      province: a.province,
+      district: a.district,
+      ward: a.ward,
+      addressDetail: a.addressDetail,
       source:
         typeof window !== "undefined" ? window.location.pathname : undefined,
     };
@@ -159,17 +176,14 @@ export default function OrderForm() {
                       autoComplete="tel"
                       pattern="[0-9+ ]{8,}"
                     />
-                    <div className="sm:col-span-2">
-                      <TicketField
-                        idx="03"
-                        label={o.fields.address}
-                        name="address"
-                        required
-                        autoComplete="street-address"
-                      />
-                    </div>
+                    <AddressPicker
+                      onChange={(v) => {
+                        addr.current = v;
+                      }}
+                    />
+
                     <TicketField
-                      idx="04"
+                      idx="07"
                       label={o.fields.quantity}
                       name="quantity"
                       type="number"
