@@ -242,6 +242,15 @@ export const site = {
     ],
   },
 
+  // --- SePay (thanh toán chuyển khoản tự động — đọc từ env) ---
+  // Bank info thật phải được cấu hình qua env (SEPAY_BANK_CODE, ...).
+  // Phần này chỉ là default rỗng để không crash build.
+  bank: {
+    code: "MBBank",
+    account: "",
+    accountName: "",
+  },
+
   // --- Form đặt hàng (giả — nối API sau) ---
   orderForm: {
     heading: "ĐẶT SÁCH",

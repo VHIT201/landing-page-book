@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createOrder } from "@/lib/orders";
 import { notifyOwner } from "@/lib/notify";
 import { createOrderSchema } from "@/lib/validation";
+import { buildPaymentInstructions, getBankInfo } from "@/lib/sepay";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,13 @@ export async function POST(req: Request) {
         `SL ${order.quantity} — <b>${order.totalAmount.toLocaleString("vi-VN")}đ</b>`,
     );
 
+    // Build payment instructions nếu SePay đã được config.
+    const bank = getBankInfo();
+    const paymentInfo =
+      bank && process.env.SEPAY_ENABLED === "true"
+        ? buildPaymentInstructions(bank, order.code, order.totalAmount)
+        : null;
+
     return NextResponse.json(
       {
         code: order.code,
@@ -39,6 +47,7 @@ export async function POST(req: Request) {
         shippingFee: order.shippingFee,
         totalAmount: order.totalAmount,
         status: order.status,
+        paymentInfo,
       },
       { status: 201 },
     );

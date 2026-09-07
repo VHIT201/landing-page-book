@@ -1,0 +1,14 @@
+{
+  "id": 92705,
+  "gateway": "Vietcombank",
+  "transactionDate": "2024-07-02 11:10:00",
+  "accountNumber": "0123456789",
+  "subAccount": "",
+  "code": "LC-AB23CD",
+  "content": "LC-AB23CD thanh toan",
+  "transferType": "in",
+  "description": "",
+  "transferAmount": 100000,
+  "accumulated": 0,
+  "referenceCode": "FT24099999999"
+}

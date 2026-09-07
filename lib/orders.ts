@@ -1,10 +1,17 @@
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
-import { db } from "./db";
+import { db, schema } from "./db";
 import {
-  Order,
-  OrderStatus,
-  orderStatusHistory,
+  type Order,
+  type OrderStatus,
+  type Payment,
+  type SepayWebhookLog,
+  type NewPayment,
+  type PaymentStatus,
+  type PaymentProvider,
   orders,
+  payments,
+  sepayWebhookLogs,
+  orderStatusHistory,
 } from "./db/schema";
 import type { CreateOrderInput } from "./validation";
 
@@ -34,6 +41,17 @@ function composeAddress(i: CreateOrderInput): string {
     .join(", ");
 }
 
+/**
+ * Tạo order + payment record trong CÙNG transaction.
+ *
+ * Trước đây `createOrder` không dùng transaction → race condition có thể
+ * tạo order mà không có history. Phase SePay đã vá lỗi này:
+ * - Insert order + payment + history atomic.
+ * - Nếu bất kỳ step nào fail → rollback toàn bộ.
+ *
+ * Lưu ý: Drizzle 0.45 với postgres-js dùng callback-style transaction.
+ * Đảm bảo db index hoạt động đúng với Neon's pool.
+ */
 export async function createOrder(input: CreateOrderInput): Promise<Order> {
   const { unitPrice, shippingFee, totalAmount } = priceQuote(input.quantity);
   const addressLine = composeAddress(input);
@@ -41,39 +59,51 @@ export async function createOrder(input: CreateOrderInput): Promise<Order> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = genCode();
     try {
-      const [row] = await db
-        .insert(orders)
-        .values({
-          code,
-          customerName: input.name,
-          customerPhone: input.phone,
-          provinceCode: input.province.code,
-          provinceName: input.province.name,
-          districtCode: input.district.code,
-          districtName: input.district.name,
-          wardCode: input.ward.code,
-          wardName: input.ward.name,
-          addressDetail: input.addressDetail,
-          addressLine,
-          quantity: input.quantity,
-          unitPrice,
-          shippingFee,
-          totalAmount,
-          status: "pending_payment",
-          source: input.source ?? null,
-        })
-        .returning();
+      const result = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(orders)
+          .values({
+            code,
+            customerName: input.name,
+            customerPhone: input.phone,
+            provinceCode: input.province.code,
+            provinceName: input.province.name,
+            districtCode: input.district.code,
+            districtName: input.district.name,
+            wardCode: input.ward.code,
+            wardName: input.ward.name,
+            addressDetail: input.addressDetail,
+            addressLine,
+            quantity: input.quantity,
+            unitPrice,
+            shippingFee,
+            totalAmount,
+            status: "pending_payment",
+            source: input.source ?? null,
+          })
+          .returning();
 
-      await db.insert(orderStatusHistory).values({
-        orderId: row.id,
-        fromStatus: null,
-        toStatus: "pending_payment",
-        actor: "system",
+        await tx.insert(orderStatusHistory).values({
+          orderId: row.id,
+          fromStatus: null,
+          toStatus: "pending_payment",
+          actor: "system",
+        });
+
+        await tx.insert(payments).values({
+          orderId: row.id,
+          provider: "sepay" as PaymentProvider,
+          amount: totalAmount,
+          currency: "VND",
+          status: "pending" as PaymentStatus,
+        });
+
+        return row;
       });
-
-      return row;
+      return result;
     } catch (err: unknown) {
       const msg = String((err as { message?: string })?.message ?? "");
+      // Retry chỉ khi collision code (rất hiếm với 32^6 = ~1 tỷ codes)
       if (msg.includes("orders_code_unique") || msg.includes("duplicate key")) {
         continue;
       }
@@ -178,6 +208,45 @@ export async function getOrderHistory(orderId: string) {
     .orderBy(orderStatusHistory.createdAt);
 }
 
+/**
+ * Lấy payment theo orderId (active payment, status != failed).
+ */
+export async function getActivePaymentByOrder(orderId: string): Promise<Payment | null> {
+  const [row] = await db
+    .select()
+    .from(payments)
+    .where(and(eq(payments.orderId, orderId), sql`${payments.status} <> 'failed'`));
+  return row ?? null;
+}
+
+/**
+ * Lấy payment + order status cho endpoint polling.
+ * Trả về shape gọn.
+ */
+export async function getPaymentStatusForOrder(
+  orderCode: string,
+): Promise<
+  | {
+      orderStatus: OrderStatus;
+      paymentStatus: PaymentStatus;
+      amount: number;
+      paidAt: Date | null;
+      provider: string | null;
+    }
+  | null
+> {
+  const order = await getOrderByCode(orderCode);
+  if (!order) return null;
+  const payment = await getActivePaymentByOrder(order.id);
+  return {
+    orderStatus: order.status,
+    paymentStatus: (payment?.status ?? "pending") as PaymentStatus,
+    amount: order.totalAmount,
+    paidAt: payment?.paidAt ?? null,
+    provider: payment?.provider ?? null,
+  };
+}
+
 export async function getStats() {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -208,3 +277,67 @@ export async function getStats() {
     byStatus,
   };
 }
+
+/**
+ * Lấy danh sách webhook logs (phân trang) — cho admin debug.
+ */
+export async function listSepayWebhookLogs(opts: { limit?: number; offset?: number }) {
+  const limit = Math.min(100, Math.max(1, opts.limit ?? 50));
+  const offset = Math.max(0, opts.offset ?? 0);
+  const rows = await db
+    .select()
+    .from(sepayWebhookLogs)
+    .orderBy(desc(sepayWebhookLogs.processedAt))
+    .limit(limit)
+    .offset(offset);
+  return rows;
+}
+
+/**
+ * Lấy payment có sepay transaction_id cụ thể (dùng cho dedup).
+ */
+export async function getPaymentBySepayTransactionId(
+  transactionId: number,
+): Promise<Payment | null> {
+  const [row] = await db
+    .select()
+    .from(payments)
+    .where(eq(payments.sepayTransactionId, transactionId));
+  return row ?? null;
+}
+
+/**
+ * Lấy webhook log theo transaction_id (dùng cho idempotency).
+ */
+export async function getWebhookLogByTransactionId(
+  transactionId: number,
+): Promise<SepayWebhookLog | null> {
+  const [row] = await db
+    .select()
+    .from(sepayWebhookLogs)
+    .where(eq(sepayWebhookLogs.transactionId, transactionId));
+  return row ?? null;
+}
+
+/**
+ * Mark payment FAILED (cho edge case webhook xử lý nhưng lỗi logic).
+ * KHÔNG update order status.
+ */
+export async function markPaymentFailed(
+  paymentId: string,
+  meta: Record<string, unknown> = {},
+): Promise<void> {
+  await db
+    .update(payments)
+    .set({
+      status: "failed",
+      updatedAt: new Date(),
+      sepayContent: meta.content ? String(meta.content) : null,
+    })
+    .where(eq(payments.id, paymentId));
+}
+
+/**
+ * Expose schema cho callers muốn dùng drizzle.
+ */
+export { schema };

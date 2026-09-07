@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrderByCode, getOrderHistory } from "@/lib/orders";
+import { db, schema } from "@/lib/db";
+import { and, eq, sql } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
@@ -27,6 +29,14 @@ export async function GET(
 
   const history = await getOrderHistory(order.id);
 
+  // Lấy payment (chỉ active payment, không bao gồm 'failed').
+  const [payment] = await db
+    .select()
+    .from(schema.payments)
+    .where(
+      and(eq(schema.payments.orderId, order.id), sql`${schema.payments.status} <> 'failed'`),
+    );
+
   return NextResponse.json({
     code: order.code,
     status: order.status,
@@ -40,6 +50,18 @@ export async function GET(
     trackingNo: order.trackingNo,
     createdAt: order.createdAt,
     paidAt: order.paidAt,
+    payment: payment
+      ? {
+          status: payment.status,
+          provider: payment.provider,
+          paidAt: payment.paidAt,
+          gateway: payment.sepayGateway,
+          transactionId: payment.sepayTransactionId
+            ? Number(payment.sepayTransactionId)
+            : null,
+          referenceCode: payment.sepayReferenceCode,
+        }
+      : null,
     history: history.map((h) => ({
       toStatus: h.toStatus,
       actor: h.actor,
