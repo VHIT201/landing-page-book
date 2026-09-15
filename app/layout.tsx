@@ -41,13 +41,14 @@ export const metadata: Metadata = {
     title: site.meta.title,
     description: site.meta.description,
     siteName: site.brand.name,
-    // ảnh share sinh tự động bởi app/opengraph-image.tsx — không cần file tĩnh
+    images: [{ url: site.meta.ogImage, width: 1200, height: 630, alt: site.meta.title }],
   },
   twitter: {
     card: "summary_large_image",
     title: site.meta.title,
     description: site.meta.description,
     site: site.meta.twitterHandle,
+    images: [site.meta.ogImage],
   },
   robots: { index: true, follow: true },
 };

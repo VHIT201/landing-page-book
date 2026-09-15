@@ -18,7 +18,7 @@ export const site = {
       "triết lý sống",
       "cấu trúc sống",
     ],
-    ogImage: "/images/og.jpg", // TODO: ảnh share 1200x630
+    ogImage: "/images/seo.png",
     locale: "vi_VN",
     twitterHandle: "@thelifecar",
   },
