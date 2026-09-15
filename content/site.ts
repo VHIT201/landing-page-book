@@ -6,7 +6,7 @@
 export const site = {
   // --- Thông tin chung / SEO ---
   meta: {
-    siteUrl: "https://thelifecar.example.com", // TODO: domain thật
+    siteUrl: "https://lifecar.vn",
     title: "THE LIFECAR™ — Chiếc Xe Cuộc Đời | Nguyễn Chí Thành",
     description:
       "Cuốn sách xây dựng một cấu trúc sống để tiến xa mà không lạc lối. 5 hệ thống nền tảng: MTUA, AXIS, RACT, CTR, BOILE. Tác giả Nguyễn Chí Thành — Triết Nghiệm Gia.",
